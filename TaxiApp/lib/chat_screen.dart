@@ -40,11 +40,6 @@ class _ChatScreenState extends State<ChatScreen>
         messages.add({
           "role": "bot",
           "text": "Hello! I'm your taxi booking assistant. How can I help you today?",
-          "buttons": [
-            {"title": "Book a Ride", "payload": "book_ride"},
-            {"title": "Track Order", "payload": "track_order"},
-            {"title": "Help", "payload": "help"}
-          ]
         });
       });
     });
@@ -122,6 +117,11 @@ class _ChatScreenState extends State<ChatScreen>
     sendMessage(payload);
   }
 
+  void handleStarRating(int rating) {
+    HapticFeedback.selectionClick();
+    sendMessage(rating.toString());
+  }
+
   void _scrollToBottom() {
     Future.delayed(Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
@@ -184,6 +184,63 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         );
       },
+    );
+  }
+
+  // Check if the buttons are rating buttons (1-5)
+  bool _isRatingButtons(List? buttons) {
+    if (buttons == null || buttons.length != 5) return false;
+    
+    for (int i = 0; i < buttons.length; i++) {
+      final button = buttons[i];
+      if (button == null) return false;
+      
+      final title = button['title']?.toString() ?? '';
+      final payload = button['payload']?.toString() ?? '';
+      
+      if (title != (i + 1).toString() && payload != (i + 1).toString()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Widget _buildStarRating(List? buttons) {
+    return Container(
+      margin: EdgeInsets.only(top: 8),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Color(0xFF6C63FF).withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Rate your experience:",
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          SizedBox(height: 12),
+          StarRatingWidget(
+            onRatingChanged: handleStarRating,
+          ),
+        ],
+      ),
     );
   }
 
@@ -332,45 +389,52 @@ class _ChatScreenState extends State<ChatScreen>
                                 ),
                               ),
                             ),
-                            if (!isUser && (message['buttons'] as List).isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  children: (message['buttons'] as List)
-                                      .map<Widget>((button) {
-                                    return Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        onTap: () => handleButtonClick(
-                                            button['payload'] ?? button['title']),
-                                        borderRadius: BorderRadius.circular(20),
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(
-                                              horizontal: 14, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: Color(0xFF6C63FF).withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: Color(0xFF6C63FF).withOpacity(0.3),
-                                              width: 1,
+                            if (!isUser && (message['buttons'] != null && (message['buttons'] as List).isNotEmpty)) ...[
+                              // Check if buttons are rating buttons (1-5)
+                              if (_isRatingButtons(message['buttons'] as List?))
+                                _buildStarRating(message['buttons'] as List?)
+                              else
+                                // Regular buttons
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    children: ((message['buttons'] as List?) ?? [])
+                                        .map<Widget>((button) {
+                                      if (button == null) return SizedBox.shrink();
+                                      return Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () => handleButtonClick(
+                                              button['payload'] ?? button['title']),
+                                          borderRadius: BorderRadius.circular(20),
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: 14, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: Color(0xFF6C63FF).withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: Color(0xFF6C63FF).withOpacity(0.3),
+                                                width: 1,
+                                              ),
                                             ),
-                                          ),
-                                          child: Text(
-                                            button['title'],
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: Color(0xFF6C63FF),
-                                              fontWeight: FontWeight.w500,
+                                            child: Text(
+                                              button['title'] ?? '',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Color(0xFF6C63FF),
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    );
-                                  }).toList(),
+                                      );
+                                    }).toList(),
+                                  ),
                                 ),
-                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -476,6 +540,122 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ],
       ),
+    );
+  }
+}
+
+// Custom Star Rating Widget
+class StarRatingWidget extends StatefulWidget {
+  final Function(int) onRatingChanged;
+  final int maxRating;
+  final double starSize;
+
+  const StarRatingWidget({
+    Key? key,
+    required this.onRatingChanged,
+    this.maxRating = 5,
+    this.starSize = 32.0,
+  }) : super(key: key);
+
+  @override
+  _StarRatingWidgetState createState() => _StarRatingWidgetState();
+}
+
+class _StarRatingWidgetState extends State<StarRatingWidget>
+    with TickerProviderStateMixin {
+  int _currentRating = 0;
+  int _hoverRating = 0;
+  late List<AnimationController> _animationControllers;
+  late List<Animation<double>> _scaleAnimations;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationControllers = List.generate(
+      widget.maxRating,
+      (index) => AnimationController(
+        duration: Duration(milliseconds: 150),
+        vsync: this,
+      ),
+    );
+    
+    _scaleAnimations = _animationControllers.map((controller) {
+      return Tween<double>(begin: 1.0, end: 1.2).animate(
+        CurvedAnimation(parent: controller, curve: Curves.elasticOut),
+      );
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    for (var controller in _animationControllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _onStarTap(int rating) {
+    setState(() {
+      _currentRating = rating;
+    });
+    
+    // Animate the tapped star
+    _animationControllers[rating - 1].forward().then((_) {
+      _animationControllers[rating - 1].reverse();
+    });
+    
+    // Provide haptic feedback
+    HapticFeedback.selectionClick();
+    
+    // Call the callback with delay for better UX
+    Future.delayed(Duration(milliseconds: 100), () {
+      widget.onRatingChanged(rating);
+    });
+  }
+
+  void _onStarHover(int rating) {
+    setState(() {
+      _hoverRating = rating;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(widget.maxRating, (index) {
+        final starNumber = index + 1;
+        final isActive = starNumber <= (_hoverRating > 0 ? _hoverRating : _currentRating);
+        
+        return AnimatedBuilder(
+          animation: _scaleAnimations[index],
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _scaleAnimations[index].value,
+              child: GestureDetector(
+                onTap: () => _onStarTap(starNumber),
+                child: MouseRegion(
+                  onEnter: (_) => _onStarHover(starNumber),
+                  onExit: (_) => _onStarHover(0),
+                  child: Container(
+                    padding: EdgeInsets.all(4),
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: 200),
+                      child: Icon(
+                        isActive ? Icons.star : Icons.star_border,
+                        size: widget.starSize,
+                        color: isActive 
+                            ? Color(0xFFFFD700) // Gold color
+                            : Colors.grey[400],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      }),
     );
   }
 }
